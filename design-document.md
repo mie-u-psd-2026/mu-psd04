@@ -495,4 +495,474 @@ APIのバージョンをURLに含め、`/api/v1/` を共通のパスとする。
 | API-04 | POST | /api/v1/workout-records | 筋トレ完了記録を作成し、XP・レベル・ストリークを更新する |
 
 ---
+# 9. API入出力JSON仕様
+
+## 9.1 API-01 成長状態取得
+
+### Endpoint
+
+```text
+GET /api/v1/progress
+```
+
+### 概要
+
+現在のXP、レベル、ストリーク、本日の筋トレ完了状況を取得する。
+
+### Request
+
+なし。
+
+### Response
+
+#### 200 OK
+
+```json
+{
+  "level": 3,
+  "currentXp": 240,
+  "nextLevelXp": 300,
+  "streak": 5,
+  "trainedToday": false
+}
+```
+
+### レスポンス項目
+
+| 項目 | 型 | 内容 |
+|---|---|---|
+| level | number | 現在のレベル |
+| currentXp | number | 現在のXP |
+| nextLevelXp | number | 次のレベルに到達するために必要なXP |
+| streak | number | 連続して筋トレを実施した日数 |
+| trainedToday | boolean | 当日に筋トレを完了したかどうか |
+
+---
+
+## 9.2 API-02 筋トレメニュー作成
+
+### Endpoint
+
+```text
+POST /api/v1/workout-plans
+```
+
+### 概要
+
+ユーザーが指定した鍛えたい部位と運動時間を基に、生成AIを利用して筋トレメニューを新規作成する。
+
+### Request
+
+```json
+{
+  "targetPart": "chest",
+  "duration": 20
+}
+```
+
+### リクエスト項目
+
+| 項目 | 型 | 必須 | 内容 |
+|---|---|---|---|
+| targetPart | string | ○ | 鍛えたい部位 |
+| duration | number | ○ | 運動時間（分） |
+
+### targetPartの値
+
+| 値 | 内容 |
+|---|---|
+| chest | 胸 |
+| arms | 腕 |
+| back | 背中 |
+| shoulders | 肩 |
+| abs | 腹筋 |
+| legs | 脚 |
+| fullBody | 全身 |
+
+### durationの値
+
+以下のいずれかとする。
+
+```text
+10
+20
+30
+45
+60
+```
+
+### Response
+
+#### 201 Created
+
+```json
+{
+  "workoutPlanId": 1,
+  "title": "胸20分トレーニング",
+  "targetPart": "chest",
+  "duration": 20,
+  "exercises": [
+    {
+      "name": "プッシュアップ",
+      "reps": 10,
+      "seconds": null,
+      "sets": 3
+    },
+    {
+      "name": "ナロープッシュアップ",
+      "reps": 8,
+      "seconds": null,
+      "sets": 3
+    },
+    {
+      "name": "プランク",
+      "reps": null,
+      "seconds": 30,
+      "sets": 3
+    }
+  ]
+}
+```
+
+### レスポンス項目
+
+| 項目 | 型 | 内容 |
+|---|---|---|
+| workoutPlanId | number | 作成された筋トレメニューのID |
+| title | string | 筋トレメニューのタイトル |
+| targetPart | string | 対象部位 |
+| duration | number | 目安の運動時間（分） |
+| exercises | array | 筋トレ種目の一覧 |
+| name | string | 種目名 |
+| reps | number / null | 実施回数。時間指定の種目ではnull |
+| seconds | number / null | 実施時間（秒）。回数指定の種目ではnull |
+| sets | number | セット数 |
+
+---
+
+## 9.3 API-03 今日の筋トレメニュー取得
+
+### Endpoint
+
+```text
+GET /api/v1/workout-plans/today
+```
+
+### 概要
+
+当日に作成された筋トレメニューを取得する。
+
+### Request
+
+なし。
+
+### Response
+
+#### 200 OK：筋トレメニューが存在する場合
+
+```json
+{
+  "exists": true,
+  "completed": false,
+  "workoutPlan": {
+    "workoutPlanId": 1,
+    "title": "胸20分トレーニング",
+    "targetPart": "chest",
+    "duration": 20,
+    "exercises": [
+      {
+        "name": "プッシュアップ",
+        "reps": 10,
+        "seconds": null,
+        "sets": 3
+      },
+      {
+        "name": "ナロープッシュアップ",
+        "reps": 8,
+        "seconds": null,
+        "sets": 3
+      },
+      {
+        "name": "プランク",
+        "reps": null,
+        "seconds": 30,
+        "sets": 3
+      }
+    ]
+  }
+}
+```
+
+### レスポンス項目
+
+| 項目 | 型 | 内容 |
+|---|---|---|
+| exists | boolean | 当日の筋トレメニューが存在するか |
+| completed | boolean | 当日の筋トレが完了済みか |
+| workoutPlan | object / null | 当日の筋トレメニュー |
+
+#### 200 OK：筋トレメニューが存在しない場合
+
+```json
+{
+  "exists": false,
+  "completed": false,
+  "workoutPlan": null
+}
+```
+
+---
+
+## 9.4 API-04 筋トレ完了記録作成
+
+### Endpoint
+
+```text
+POST /api/v1/workout-records
+```
+
+### 概要
+
+指定された筋トレメニューを完了したことを記録する。
+
+筋トレ完了記録の作成に成功した場合、以下の情報を更新する。
+
+- XP
+- レベル
+- ストリーク
+
+### Request
+
+```json
+{
+  "workoutPlanId": 1
+}
+```
+
+### リクエスト項目
+
+| 項目 | 型 | 必須 | 内容 |
+|---|---|---|---|
+| workoutPlanId | number | ○ | 完了した筋トレメニューのID |
+
+### Response
+
+#### 201 Created：通常完了時
+
+```json
+{
+  "workoutRecordId": 1,
+  "xpGained": 50,
+  "currentXp": 290,
+  "level": 3,
+  "levelUp": false,
+  "previousLevel": 3,
+  "streak": 6,
+  "message": "トレーニングお疲れさま！この調子で続けていきましょう！"
+}
+```
+
+#### 201 Created：レベルアップ時
+
+```json
+{
+  "workoutRecordId": 2,
+  "xpGained": 50,
+  "currentXp": 20,
+  "level": 4,
+  "levelUp": true,
+  "previousLevel": 3,
+  "streak": 6,
+  "message": "レベルアップおめでとう！この調子で続けていきましょう！"
+}
+```
+
+### レスポンス項目
+
+| 項目 | 型 | 内容 |
+|---|---|---|
+| workoutRecordId | number | 作成された筋トレ完了記録のID |
+| xpGained | number | 今回の筋トレで獲得したXP |
+| currentXp | number | 更新後の現在XP |
+| level | number | 更新後のレベル |
+| levelUp | boolean | 今回の筋トレでレベルアップしたか |
+| previousLevel | number | 更新前のレベル |
+| streak | number | 更新後の連続筋トレ日数 |
+| message | string | ユーザーに表示する励ましメッセージ |
+
+---
+
+# 10. APIエラー仕様
+
+APIでエラーが発生した場合は、フロントエンド側で共通処理できるようにエラーレスポンスの形式を統一する。
+
+エラーレスポンスは以下の形式を基本とする。
+
+```json
+{
+  "type": "エラーを識別するURI",
+  "title": "エラーの種類",
+  "status": 400,
+  "detail": "ユーザーまたは開発者が確認するエラーの詳細"
+}
+```
+
+入力値に問題がある場合は、`invalidParams` に問題となった項目を格納する。
+
+---
+
+## 10.1 400 Bad Request
+
+### 発生条件
+
+- 必須項目が入力されていない
+- `targetPart` に定義されていない値が指定された
+- `duration` に定義されていない値が指定された
+- `workoutPlanId` が不正な形式である
+
+### Response例
+
+```json
+{
+  "type": "https://duomuscle.example/errors/invalid-input",
+  "title": "Invalid Parameter",
+  "status": 400,
+  "detail": "入力内容に誤りがあります。",
+  "invalidParams": [
+    {
+      "name": "duration",
+      "reason": "運動時間を選択してください。"
+    }
+  ]
+}
+```
+
+---
+
+## 10.2 404 Not Found
+
+### 発生条件
+
+指定された筋トレメニューが存在しない場合。
+
+### Response例
+
+```json
+{
+  "type": "https://duomuscle.example/errors/not-found",
+  "title": "Resource Not Found",
+  "status": 404,
+  "detail": "指定された筋トレメニューが見つかりませんでした。"
+}
+```
+
+---
+
+## 10.3 409 Conflict
+
+### 発生条件
+
+同じ筋トレメニューに対して、すでに完了記録が作成されている場合。
+
+### Response例
+
+```json
+{
+  "type": "https://duomuscle.example/errors/already-completed",
+  "title": "Workout Already Completed",
+  "status": 409,
+  "detail": "この筋トレはすでに完了しています。"
+}
+```
+
+---
+
+## 10.4 500 Internal Server Error
+
+### 発生条件
+
+バックエンド内部で予期しないエラーが発生した場合。
+
+### Response例
+
+```json
+{
+  "type": "https://duomuscle.example/errors/internal-server-error",
+  "title": "Internal Server Error",
+  "status": 500,
+  "detail": "サーバーでエラーが発生しました。"
+}
+```
+
+---
+
+## 10.5 503 Service Unavailable
+
+### 発生条件
+
+Ollamaまたは生成AIとの通信に失敗した場合。
+
+### Response例
+
+```json
+{
+  "type": "https://duomuscle.example/errors/ai-unavailable",
+  "title": "AI Service Unavailable",
+  "status": 503,
+  "detail": "AIとの通信に失敗しました。時間をおいて再度お試しください。"
+}
+```
+
+---
+
+## 10.6 HTTPステータスコード一覧
+
+| HTTP Status | 用途 |
+|---|---|
+| 200 OK | データ取得成功 |
+| 201 Created | 新しいデータの作成成功 |
+| 400 Bad Request | 入力値が不正 |
+| 404 Not Found | 指定されたデータが存在しない |
+| 409 Conflict | 完了記録の二重登録など、現在の状態と処理が競合している |
+| 500 Internal Server Error | バックエンド内部で予期しないエラーが発生 |
+| 503 Service Unavailable | Ollamaまたは生成AIとの通信に失敗 |
+
+---
+
+# 11. フロントエンド・バックエンド間の基本通信フロー
+
+AIによる筋トレメニュー作成時の基本的な通信フローを以下に示す。
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant F as Frontend
+    participant B as Backend
+    participant A as Ollama
+
+    U->>F: 部位・運動時間を入力
+    U->>F: 「AIでメニューを作る」を押下
+    F->>B: POST /api/v1/workout-plans
+    B->>A: 筋トレメニュー生成プロンプト
+    A-->>B: 生成結果
+    B-->>F: 201 Created + JSON
+    F-->>U: 筋トレメニューを表示
+```
+
+生成AIとの通信に失敗した場合は、バックエンドが503 Service Unavailableを返し、フロントエンドはエラーメッセージを表示する。
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant F as Frontend
+    participant B as Backend
+    participant A as Ollama
+
+    U->>F: 「AIでメニューを作る」を押下
+    F->>B: POST /api/v1/workout-plans
+    B->>A: 筋トレメニュー生成要求
+    A--xB: 通信失敗
+    B-->>F: 503 Service Unavailable
+    F-->>U: エラーメッセージ表示
+```
 
