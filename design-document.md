@@ -477,7 +477,127 @@ API通信や生成AIとの通信に失敗した場合は画面遷移を行わず
 
 ---
 
-# 8. APIエンドポイント一覧
+# 8. データ永続化設計
+
+サーバー側でJSONファイル（`data/user_state.json`）を用いてユーザー状態を管理する。
+単一ユーザー・演習規模のためRDB/NoSQLは導入せず、ファイルベースの永続化とする。
+
+## 8.1 ユーザー状態全体構造（`user_state.json`）
+
+```json
+{
+  "level": 1,
+  "currentXp": 0,
+  "streak": 0,
+  "lastWorkoutDate": null,
+  "nextWorkoutPlanId": 1,
+  "nextWorkoutRecordId": 1,
+  "todayWorkoutPlan": null,
+  "workoutHistory": []
+}
+```
+
+| フィールド | 型 | 内容 |
+|---|---|---|
+| level | number | 現在のレベル |
+| currentXp | number | 現在のXP（レベル内の累積） |
+| streak | number | 連続トレーニング日数 |
+| lastWorkoutDate | string / null | 最終トレーニング完了日（`YYYY-MM-DD`） |
+| nextWorkoutPlanId | number | 次に発行する workoutPlanId（採番カウンタ） |
+| nextWorkoutRecordId | number | 次に発行する workoutRecordId（採番カウンタ） |
+| todayWorkoutPlan | object / null | 当日生成されたメニュー（8.2参照）。未生成時は null |
+| workoutHistory | array | 完了記録の一覧（直近30件、8.3参照） |
+
+## 8.2 当日メニュー（`todayWorkoutPlan`）
+
+生成AIによって作成されたメニューは、完了されるまでサーバー側に保持する。
+
+```json
+{
+  "workoutPlanId": 1,
+  "title": "胸20分トレーニング",
+  "targetPart": "chest",
+  "duration": 20,
+  "exercises": [
+    { "name": "プッシュアップ", "reps": 10, "seconds": null, "sets": 3 }
+  ],
+  "completed": false,
+  "createdDate": "2026-09-03"
+}
+```
+
+- `completed`：このメニューに対して完了記録が作成済みかどうか（10.3の409判定に使用）
+- `createdDate`：生成された日付。`GET /workout-plans/today` は、この日付が「今日」と一致する場合のみメニューを返す（日付が変わっていれば `exists: false` として扱う）
+
+### 生成APIが呼ばれた際の挙動（重複生成ルール）
+同日中に `POST /workout-plans` が再度呼ばれた場合、`todayWorkoutPlan` を新しい内容で**上書き**する（相方に確認済みの方針）。上書き時、`workoutPlanId` は `nextWorkoutPlanId` をインクリメントして新規発行する。
+
+## 8.3 完了記録（`workoutHistory` の要素）
+
+```json
+{
+  "workoutRecordId": 1,
+  "date": "2026-09-02",
+  "targetPart": "chest",
+  "duration": 20,
+  "exercises": [
+    { "name": "プッシュアップ", "reps": 10, "seconds": null, "sets": 3 }
+  ],
+  "xpGained": 20
+}
+```
+
+- 完了処理が成功した時点で `todayWorkoutPlan` の内容をコピーしてこの構造に変換し、`workoutHistory` の先頭に追加する
+- `workoutHistory` は直近30件を上限とし、超過分は古いものから削除する（`workoutHistory[:30]`）
+- 完了後も `todayWorkoutPlan` 自体は削除せず、`completed: true` のまま当日中は保持する（409判定・当日表示のため）。日付が変わったら次回生成時に上書きされる
+
+---
+
+# 9. XP・レベル・ストリーク計算ロジック
+
+## 9.1 XP付与量
+
+```
+xpGained = duration（分）× 1
+```
+例：20分のトレーニング完了 → 20XP
+
+## 9.2 レベルアップ条件
+
+レベルごとの必要XP（`nextLevelXp`）は次式で算出する。
+
+```
+nextLevelXp(level) = level × 100
+```
+
+完了処理時：
+```
+currentXp += xpGained
+while currentXp >= nextLevelXp(level):
+    currentXp -= nextLevelXp(level)
+    level += 1
+    levelUp = true
+```
+（1回のトレーニングで複数レベル上がる可能性を考慮し、while文で判定する）
+
+## 9.3 ストリーク判定
+
+`lastWorkoutDate` と当日日付（`Asia/Tokyo` 基準）を比較する。
+
+```
+today == lastWorkoutDate       → streakは変化させない（同日の重複完了は想定しないが念のため）
+today == lastWorkoutDate + 1日 → streak += 1（連続達成）
+それ以外（2日以上空いた／初回） → streak = 1
+```
+
+## 9.4 今後の検討事項（スコープ外・余裕があれば対応）
+
+- **休息日（猶予日）の導入**：筋トレは超回復のため部位ごとに休息が必要。現仕様は「毎日実施しないとstreakが途切れる」設計になっており、1〜2日の猶予を許容するルールへの変更余地あり
+- **同一部位の連続トレーニングへの警告**：同じ`targetPart`を連日選択した場合にUI側で注意表示を出す案。実装には「直近で鍛えた部位と日付」の参照が必要
+
+---
+
+# 10. APIエンドポイント一覧
 
 フロントエンドとバックエンド間の通信にはHTTPを使用し、データの送受信形式はJSONとする。
 
@@ -495,9 +615,9 @@ APIのバージョンをURLに含め、`/api/v1/` を共通のパスとする。
 | API-04 | POST | /api/v1/workout-records | 筋トレ完了記録を作成し、XP・レベル・ストリークを更新する |
 
 ---
-# 9. API入出力JSON仕様
+# 11. API入出力JSON仕様
 
-## 9.1 API-01 成長状態取得
+## 11.1 API-01 成長状態取得
 
 ### Endpoint
 
@@ -539,7 +659,7 @@ GET /api/v1/progress
 
 ---
 
-## 9.2 API-02 筋トレメニュー作成
+## 11.2 API-02 筋トレメニュー作成
 
 ### Endpoint
 
@@ -640,7 +760,7 @@ POST /api/v1/workout-plans
 
 ---
 
-## 9.3 API-03 今日の筋トレメニュー取得
+## 11.3 API-03 今日の筋トレメニュー取得
 
 ### Endpoint
 
@@ -713,7 +833,7 @@ GET /api/v1/workout-plans/today
 
 ---
 
-## 9.4 API-04 筋トレ完了記録作成
+## 11.4 API-04 筋トレ完了記録作成
 
 ### Endpoint
 
@@ -792,7 +912,7 @@ POST /api/v1/workout-records
 
 ---
 
-# 10. APIエラー仕様
+# 12. APIエラー仕様
 
 APIでエラーが発生した場合は、フロントエンド側で共通処理できるようにエラーレスポンスの形式を統一する。
 
@@ -811,7 +931,7 @@ APIでエラーが発生した場合は、フロントエンド側で共通処�
 
 ---
 
-## 10.1 400 Bad Request
+## 12.1 400 Bad Request
 
 ### 発生条件
 
@@ -839,7 +959,7 @@ APIでエラーが発生した場合は、フロントエンド側で共通処�
 
 ---
 
-## 10.2 404 Not Found
+## 12.2 404 Not Found
 
 ### 発生条件
 
@@ -858,7 +978,7 @@ APIでエラーが発生した場合は、フロントエンド側で共通処�
 
 ---
 
-## 10.3 409 Conflict
+## 12.3 409 Conflict
 
 ### 発生条件
 
@@ -877,7 +997,7 @@ APIでエラーが発生した場合は、フロントエンド側で共通処�
 
 ---
 
-## 10.4 500 Internal Server Error
+## 12.4 500 Internal Server Error
 
 ### 発生条件
 
@@ -896,7 +1016,7 @@ APIでエラーが発生した場合は、フロントエンド側で共通処�
 
 ---
 
-## 10.5 503 Service Unavailable
+## 12.5 503 Service Unavailable
 
 ### 発生条件
 
@@ -915,7 +1035,7 @@ Ollamaまたは生成AIとの通信に失敗した場合。
 
 ---
 
-## 10.6 HTTPステータスコード一覧
+## 12.6 HTTPステータスコード一覧
 
 | HTTP Status | 用途 |
 |---|---|
@@ -929,7 +1049,7 @@ Ollamaまたは生成AIとの通信に失敗した場合。
 
 ---
 
-# 11. フロントエンド・バックエンド間の基本通信フロー
+# 13. フロントエンド・バックエンド間の基本通信フロー
 
 AIによる筋トレメニュー作成時の基本的な通信フローを以下に示す。
 
