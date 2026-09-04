@@ -846,7 +846,7 @@ POST /api/v1/workout-records
 ### 概要
 
 指定された筋トレメニューを完了したことを記録する。
-
+リクエストされた `workoutPlanId` が当日の `todayWorkoutPlan` と一致し、かつ `completed` が `false` であることをサーバー側で確認する。既に完了済みの場合は 409 Conflict を返す（12.3参照）。
 筋トレ完了記録の作成に成功した場合、以下の情報を更新する。
 
 - XP
