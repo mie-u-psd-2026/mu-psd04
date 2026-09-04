@@ -1,79 +1,1056 @@
 <!DOCTYPE html>
 <html lang="ja">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sample Application</title>
-    <!-- Vue.jsをCDNから読み込み -->
+
+    <title>duoMuscle</title>
+
+    <!-- Vue.js CDN -->
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
-    <!-- BootStrapをCDNから読み込み -->
-	<link rel="stylesheet" href="//cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css">
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+        }
+
+        #app {
+            max-width: 700px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 5px;
+        }
+
+        .catch-copy {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: white;
+            padding: 24px;
+            margin-bottom: 20px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .status-item {
+            text-align: center;
+            padding: 15px;
+            background: #f7f7f7;
+            border-radius: 8px;
+        }
+
+        .status-value {
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        label {
+            display: block;
+            margin-top: 20px;
+            margin-bottom: 8px;
+            font-weight: bold;
+        }
+
+        select {
+            width: 100%;
+            padding: 12px;
+            font-size: 16px;
+            border-radius: 6px;
+            border: 1px solid #aaa;
+        }
+
+        button {
+            padding: 12px 20px;
+            margin-top: 20px;
+            font-size: 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .primary-button {
+            width: 100%;
+            background: #333;
+            color: white;
+        }
+
+        .secondary-button {
+            background: #ddd;
+        }
+
+        .button-row {
+            display: flex;
+            gap: 10px;
+        }
+
+        .button-row button {
+            flex: 1;
+        }
+
+        .exercise {
+            padding: 15px 0;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .exercise:last-child {
+            border-bottom: none;
+        }
+
+        .error-message {
+            padding: 15px;
+            margin-bottom: 20px;
+            background: #ffe4e4;
+            border: 1px solid #d33;
+            border-radius: 6px;
+        }
+
+        .success-message {
+            text-align: center;
+        }
+
+        .xp {
+            font-size: 30px;
+            font-weight: bold;
+        }
+
+        .level-up {
+            font-size: 26px;
+            font-weight: bold;
+            margin: 20px 0;
+        }
+
+        .loading-area {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.85);
+
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+
+            z-index: 1000;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+
+            border: 6px solid #ddd;
+            border-top: 6px solid #333;
+            border-radius: 50%;
+
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
 </head>
+
+
 <body>
 
-    <div id="app" class="container">
-        <h2 class="mb-4">サンプルアプリ</h2>
+<div id="app">
 
-        <div class="mb-3">
-            <label for="inputText" class="form-label">テキストを入力してください:</label>
-            <textarea id="inputText" class="form-control" rows="5" v-model="inputText" placeholder="ここにテキストを入力..."></textarea>
-        </div>
+    <!-- ============================= -->
+    <!-- 共通ヘッダー -->
+    <!-- ============================= -->
 
-        <div class="mb-3">
-            <button @click="execute" class="btn btn-primary">実行</button>
-            <button @click="execute_kansai" class="btn btn-success ms-2">関西弁で実行</button>
-        </div>
-        
-        <h3>結果:</h3>
-        <div class="result-area p-3 border rounded" :class="{ 'alert alert-info': resultText && !resultText.startsWith('エラー:'), 'alert alert-danger': resultText.startsWith('エラー:') }">
-            <pre style="white-space: pre-wrap;">{{ resultText }}</pre>
-        </div>
+    <h1>duoMuscle</h1>
+
+    <p class="catch-copy">
+        ゲーム感覚で、筋トレを毎日の習慣に。
+    </p>
+
+
+    <!-- ============================= -->
+    <!-- エラー通知 -->
+    <!-- ============================= -->
+
+    <div
+        v-if="errorMessage"
+        class="error-message"
+    >
+        {{ errorMessage }}
+
+        <br>
+
+        <button
+            class="secondary-button"
+            @click="clearError"
+        >
+            閉じる
+        </button>
     </div>
 
-    <script>
-        const { createApp } = Vue;
 
-        createApp({
-            data() {
-                return {
-                    inputText: '',
-                    resultText: 'ここに結果が表示されます。'
-                };
+    <!-- ============================= -->
+    <!-- ホーム画面 -->
+    <!-- ============================= -->
+
+    <div v-if="currentView === 'home'">
+
+        <div class="card">
+
+            <h2>現在のステータス</h2>
+
+            <div class="status-grid">
+
+                <div class="status-item">
+                    <div>LEVEL</div>
+
+                    <div class="status-value">
+                        {{ progress.level }}
+                    </div>
+                </div>
+
+
+                <div class="status-item">
+                    <div>XP</div>
+
+                    <div class="status-value">
+                        {{ progress.currentXp }}
+                    </div>
+
+                    <div>
+                        / {{ progress.nextLevelXp }}
+                    </div>
+                </div>
+
+
+                <div class="status-item">
+                    <div>STREAK</div>
+
+                    <div class="status-value">
+                        {{ progress.streak }}
+                    </div>
+
+                    <div>日連続</div>
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <div class="card">
+
+            <h2>今日のトレーニング</h2>
+
+
+            <!-- 今日のメニューなし -->
+
+            <div v-if="!todayWorkoutExists">
+
+                <p>
+                    まだ今日の筋トレメニューがありません。
+                </p>
+
+                <button
+                    class="primary-button"
+                    @click="openGenerateView"
+                >
+                    筋トレメニューを作る
+                </button>
+
+            </div>
+
+
+            <!-- 今日のメニューあり -->
+
+            <div v-else>
+
+                <p>
+                    {{ workoutPlan.title }}
+                </p>
+
+                <p>
+                    目安時間：{{ workoutPlan.duration }}分
+                </p>
+
+                <button
+                    class="primary-button"
+                    @click="openWorkoutView"
+                >
+                    今日のメニューを見る
+                </button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- ============================= -->
+    <!-- AIメニュー生成画面 -->
+    <!-- ============================= -->
+
+    <div v-if="currentView === 'generate'">
+
+        <div class="card">
+
+            <h2>AI筋トレメニュー作成</h2>
+
+
+            <label for="targetPart">
+                鍛えたい部位 *
+            </label>
+
+            <select
+                id="targetPart"
+                v-model="workoutRequest.targetPart"
+            >
+
+                <option value="">
+                    選択してください
+                </option>
+
+                <option value="chest">
+                    胸
+                </option>
+
+                <option value="arms">
+                    腕
+                </option>
+
+                <option value="back">
+                    背中
+                </option>
+
+                <option value="shoulders">
+                    肩
+                </option>
+
+                <option value="abs">
+                    腹筋
+                </option>
+
+                <option value="legs">
+                    脚
+                </option>
+
+                <option value="fullBody">
+                    全身
+                </option>
+
+            </select>
+
+
+            <label for="duration">
+                運動時間 *
+            </label>
+
+            <select
+                id="duration"
+                v-model.number="workoutRequest.duration"
+            >
+
+                <option value="">
+                    選択してください
+                </option>
+
+                <option :value="10">
+                    10分
+                </option>
+
+                <option :value="20">
+                    20分
+                </option>
+
+                <option :value="30">
+                    30分
+                </option>
+
+                <option :value="45">
+                    45分
+                </option>
+
+                <option :value="60">
+                    60分
+                </option>
+
+            </select>
+
+
+            <div class="button-row">
+
+                <button
+                    class="secondary-button"
+                    @click="goHome"
+                >
+                    戻る
+                </button>
+
+
+                <button
+                    class="primary-button"
+                    :disabled="!canGenerateWorkout"
+                    @click="generateWorkout"
+                >
+                    AIでメニューを作る
+                </button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- ============================= -->
+    <!-- 筋トレメニュー画面 -->
+    <!-- ============================= -->
+
+    <div v-if="currentView === 'workout'">
+
+        <div class="card">
+
+            <h2>
+                今日の筋トレメニュー
+            </h2>
+
+
+            <h3>
+                {{ workoutPlan.title }}
+            </h3>
+
+
+            <p>
+                目安時間：
+                {{ workoutPlan.duration }}分
+            </p>
+
+
+            <div
+                v-for="(exercise, index) in workoutPlan.exercises"
+                :key="index"
+                class="exercise"
+            >
+
+                <h3>
+                    {{ index + 1 }}.
+                    {{ exercise.name }}
+                </h3>
+
+
+                <p v-if="exercise.reps !== null">
+                    {{ exercise.reps }}回
+                    ×
+                    {{ exercise.sets }}セット
+                </p>
+
+
+                <p v-if="exercise.seconds !== null">
+                    {{ exercise.seconds }}秒
+                    ×
+                    {{ exercise.sets }}セット
+                </p>
+
+            </div>
+
+
+            <div class="button-row">
+
+                <button
+                    class="secondary-button"
+                    @click="goHome"
+                >
+                    戻る
+                </button>
+
+
+                <button
+                    class="primary-button"
+                    @click="completeWorkout"
+                >
+                    筋トレ完了！
+                </button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- ============================= -->
+    <!-- 筋トレ完了画面 -->
+    <!-- ============================= -->
+
+    <div v-if="currentView === 'complete'">
+
+        <div class="card success-message">
+
+            <h2>
+                TRAINING COMPLETE!
+            </h2>
+
+
+            <p class="xp">
+                +{{ completionResult.xpGained }} XP
+            </p>
+
+
+            <div
+                v-if="completionResult.levelUp"
+                class="level-up"
+            >
+
+                LEVEL UP!
+
+                <br>
+
+                LEVEL
+                {{ completionResult.previousLevel }}
+
+                →
+
+                LEVEL
+                {{ completionResult.level }}
+
+            </div>
+
+
+            <div v-else>
+
+                <h3>
+                    LEVEL {{ completionResult.level }}
+                </h3>
+
+            </div>
+
+
+            <p>
+                現在XP：
+                {{ completionResult.currentXp }}
+            </p>
+
+
+            <p>
+                {{ completionResult.streak }}日連続！
+            </p>
+
+
+            <p>
+                {{ completionResult.message }}
+            </p>
+
+
+            <button
+                class="primary-button"
+                @click="goHome"
+            >
+                ホームへ
+            </button>
+
+        </div>
+
+    </div>
+
+
+    <!-- ============================= -->
+    <!-- ローディング -->
+    <!-- ============================= -->
+
+    <div
+        v-if="isLoading"
+        class="loading-area"
+    >
+
+        <div class="spinner"></div>
+
+        <p>
+            {{ loadingMessage }}
+        </p>
+
+    </div>
+
+</div>
+
+
+<script>
+
+const { createApp } = Vue;
+
+
+createApp({
+
+    data() {
+
+        return {
+
+            currentView: "home",
+
+            isLoading: false,
+
+            loadingMessage: "",
+
+            errorMessage: "",
+
+
+            progress: {
+
+                level: 0,
+
+                currentXp: 0,
+
+                nextLevelXp: 0,
+
+                streak: 0,
+
+                trainedToday: false
+
             },
-            methods: {
-                async sendRequest(context = null) {
-                    this.resultText = '処理中...';
-                    try {
-                        const payload = { text: this.inputText };
-                        if (context) {
-                            payload.context = context;
+
+
+            workoutRequest: {
+
+                targetPart: "",
+
+                duration: ""
+
+            },
+
+
+            workoutPlan: {
+
+                workoutPlanId: null,
+
+                title: "",
+
+                targetPart: "",
+
+                duration: 0,
+
+                exercises: []
+
+            },
+
+
+            todayWorkoutExists: false,
+
+
+            completionResult: {
+
+                workoutRecordId: null,
+
+                xpGained: 0,
+
+                currentXp: 0,
+
+                level: 0,
+
+                levelUp: false,
+
+                previousLevel: 0,
+
+                streak: 0,
+
+                message: ""
+
+            }
+
+        };
+
+    },
+
+
+    computed: {
+
+        canGenerateWorkout() {
+
+            return (
+                this.workoutRequest.targetPart !== "" &&
+                this.workoutRequest.duration !== ""
+            );
+
+        }
+
+    },
+
+
+    methods: {
+
+        /*
+         * APIを呼び出す共通処理
+         */
+        async requestApi(url, options = {}) {
+
+            const response = await fetch(url, options);
+
+            const responseData = await response.json();
+
+
+            if (!response.ok) {
+
+                const message =
+                    responseData.detail ||
+                    "処理中にエラーが発生しました。";
+
+                throw new Error(message);
+
+            }
+
+
+            return responseData;
+
+        },
+
+
+        /*
+         * ホーム画面でユーザー状態を取得
+         */
+        async loadProgress() {
+
+            return await this.requestApi(
+                "/api/v1/progress"
+            );
+
+        },
+
+
+        /*
+         * 今日の筋トレメニューを取得
+         */
+        async loadTodayWorkout() {
+
+            return await this.requestApi(
+                "/api/v1/workout-plans/today"
+            );
+
+        },
+
+
+        /*
+         * ホーム画面の情報を読み込む
+         */
+        async loadHomeData() {
+
+            this.startLoading(
+                "情報を読み込んでいます..."
+            );
+
+
+            try {
+
+                const [
+                    progress,
+                    todayWorkout
+                ] = await Promise.all([
+
+                    this.loadProgress(),
+
+                    this.loadTodayWorkout()
+
+                ]);
+
+
+                this.progress = progress;
+
+                this.todayWorkoutExists =
+                    todayWorkout.exists;
+
+
+                if (todayWorkout.exists) {
+
+                    this.workoutPlan =
+                        todayWorkout.workoutPlan;
+
+                }
+
+            } catch (error) {
+
+                this.showError(
+                    error.message
+                );
+
+            } finally {
+
+                this.stopLoading();
+
+            }
+
+        },
+
+
+        /*
+         * AI筋トレメニューを生成
+         */
+        async generateWorkout() {
+
+            if (!this.canGenerateWorkout) {
+
+                this.showError(
+                    "鍛えたい部位と運動時間を選択してください。"
+                );
+
+                return;
+
+            }
+
+
+            this.startLoading(
+                "AIが筋トレメニューを考えています..."
+            );
+
+
+            try {
+
+                const workoutPlan =
+                    await this.requestApi(
+
+                        "/api/v1/workout-plans",
+
+                        {
+                            method: "POST",
+
+                            headers: {
+                                "Content-Type":
+                                    "application/json"
+                            },
+
+                            body: JSON.stringify(
+                                this.workoutRequest
+                            )
                         }
 
-                        const response = await fetch('/send_api', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                            },
-                            body: JSON.stringify(payload)
-                        });
-                        const data = await response.json();
-                        if (response.ok) {
-                            this.resultText = data.processed_text;
-                        } else {
-                            this.resultText = `エラー: ${data.error || '不明なエラーが発生しました。'}`;
-                        }
-                    } catch (error) {
-                        this.resultText = `エラー: ${error.message}`;
-                    }
-                },
-                execute() {
-                    this.sendRequest();
-                },
-                execute_kansai() {
-                    this.sendRequest("あなたは親切な関西人です。ユーザーからの入力に対して、必ず関西弁で、親しみやすく、そして140字以内で回答してください。");
-                }
+                    );
+
+
+                this.workoutPlan =
+                    workoutPlan;
+
+
+                this.currentView =
+                    "workout";
+
+            } catch (error) {
+
+                this.showError(
+                    error.message
+                );
+
+            } finally {
+
+                this.stopLoading();
+
             }
-        }).mount('#app');
-    </script>
+
+        },
+
+
+        /*
+         * 筋トレ完了記録を登録
+         */
+        async completeWorkout() {
+
+            if (!this.workoutPlan.workoutPlanId) {
+
+                this.showError(
+                    "筋トレメニューの情報がありません。"
+                );
+
+                return;
+
+            }
+
+
+            this.startLoading(
+                "筋トレ結果を記録しています..."
+            );
+
+
+            try {
+
+                const result =
+                    await this.requestApi(
+
+                        "/api/v1/workout-records",
+
+                        {
+                            method: "POST",
+
+                            headers: {
+                                "Content-Type":
+                                    "application/json"
+                            },
+
+                            body: JSON.stringify({
+
+                                workoutPlanId:
+                                    this.workoutPlan
+                                        .workoutPlanId
+
+                            })
+
+                        }
+
+                    );
+
+
+                this.completionResult =
+                    result;
+
+
+                this.currentView =
+                    "complete";
+
+            } catch (error) {
+
+                this.showError(
+                    error.message
+                );
+
+            } finally {
+
+                this.stopLoading();
+
+            }
+
+        },
+
+
+        /*
+         * AIメニュー作成画面へ移動
+         */
+        openGenerateView() {
+
+            this.clearError();
+
+            this.currentView =
+                "generate";
+
+        },
+
+
+        /*
+         * 今日の筋トレ画面へ移動
+         */
+        openWorkoutView() {
+
+            this.clearError();
+
+            this.currentView =
+                "workout";
+
+        },
+
+
+        /*
+         * ホームへ戻る
+         */
+        async goHome() {
+
+            this.clearError();
+
+            this.currentView =
+                "home";
+
+
+            await this.loadHomeData();
+
+        },
+
+
+        /*
+         * Loading開始
+         */
+        startLoading(message) {
+
+            this.loadingMessage =
+                message;
+
+            this.isLoading =
+                true;
+
+        },
+
+
+        /*
+         * Loading終了
+         */
+        stopLoading() {
+
+            this.isLoading =
+                false;
+
+            this.loadingMessage =
+                "";
+
+        },
+
+
+        /*
+         * エラー通知
+         */
+        showError(message) {
+
+            this.errorMessage =
+                message;
+
+        },
+
+
+        /*
+         * エラー通知を消す
+         */
+        clearError() {
+
+            this.errorMessage =
+                "";
+
+        }
+
+    },
+
+
+    mounted() {
+
+        this.loadHomeData();
+
+    }
+
+}).mount("#app");
+
+</script>
+
 </body>
+
 </html>
