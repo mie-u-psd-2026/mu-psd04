@@ -643,7 +643,7 @@ GET /api/v1/progress
   "currentXp": 240,
   "nextLevelXp": 300,
   "streak": 5,
-  "trainedToday": false
+  "completed": false
 }
 ```
 
@@ -655,7 +655,7 @@ GET /api/v1/progress
 | currentXp | number | 現在のXP |
 | nextLevelXp | number | 次のレベルに到達するために必要なXP |
 | streak | number | 連続して筋トレを実施した日数 |
-| trainedToday | boolean | 当日に筋トレを完了したかどうか |
+| completed | boolean | 当日に筋トレを完了したかどうか |
 
 ---
 
