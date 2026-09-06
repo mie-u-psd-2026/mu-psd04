@@ -30,6 +30,28 @@ client = OpenAI(
 OLLAMA_MODEL = "qwen2.5-coder:0.5b"
 
 
+def _initial_state() -> dict:
+    # 初期状態定義
+    return {
+        "level": 1,
+        "currentXp": 0,
+        "streak": 0,
+        "lastWorkoutDate": None,
+        "nextWorkoutPlanId": 1,
+        "nextWorkoutRecordId": 1,
+        "todayWorkoutPlan": None,
+        "workoutHistory": [],
+    }
+
+
+def load_state() -> dict:
+    # 初回起動時などファイル未生成の場合に KeyError とならないよう、初期状態を返す
+    if not os.path.exists(DATA_FILE):
+        return _initial_state()
+    with open(DATA_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
 @app.route('/')
 def index():
     return send_from_directory(app.static_folder, 'index.html')
