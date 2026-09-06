@@ -52,6 +52,13 @@ def load_state() -> dict:
         return json.load(f)
 
 
+def save_state(state: dict) -> None:
+    # dataディレクトリが未作成の環境でも動作するようにしている
+    os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
+    with open(DATA_FILE, "w", encoding="utf-8") as f:
+        json.dump(state, f, ensure_ascii=False, indent=2)
+
+
 @app.route('/')
 def index():
     return send_from_directory(app.static_folder, 'index.html')
