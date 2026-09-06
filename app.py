@@ -1,5 +1,15 @@
 from flask import Flask, request, jsonify, send_from_directory
 from openai import OpenAI
+import json
+import os
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+
+DATA_FILE = "data/user_state.json"
+TIMEZONE = ZoneInfo("Asia/Tokyo")
+TARGET_PARTS = {"chest", "arms", "back", "shoulders", "abs", "legs", "fullBody"}
+DURATIONS = {10, 20, 30, 45, 60}
+XP_PER_WORKOUT = 50
 
 app = Flask(__name__)
 
