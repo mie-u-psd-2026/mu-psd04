@@ -59,6 +59,28 @@ def save_state(state: dict) -> None:
         json.dump(state, f, ensure_ascii=False, indent=2)
 
 
+def get_today():
+    # サーバーの実行環境によらず日付境界をJSTに統一するため固定タイムゾーンを使用
+    return datetime.now(TIMEZONE).date()
+
+
+def next_level_xp(level: int) -> int:
+    return level * 100
+
+
+def _error_response(status: int, title: str, detail: str, invalid_params=None):
+    # 仕様書12章「APIエラー仕様」に従う
+    body = {
+        "type": f"https://duomuscle.example/errors/{title.lower().replace(' ', '-')}",
+        "title": title,
+        "status": status,
+        "detail": detail,
+    }
+    if invalid_params:
+        body["invalidParams"] = invalid_params
+    return jsonify(body), status
+
+
 @app.route('/')
 def index():
     return send_from_directory(app.static_folder, 'index.html')
