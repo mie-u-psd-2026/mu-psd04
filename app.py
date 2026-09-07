@@ -81,6 +81,20 @@ def _error_response(status: int, title: str, detail: str, invalid_params=None):
     return jsonify(body), status
 
 
+@app.route('/api/v1/progress', methods=['GET'])
+def get_progress():
+    state = load_state()
+    today = get_today().isoformat()
+    completed_today = state["lastWorkoutDate"] == today
+    return jsonify({
+        "level": state["level"],
+        "currentXp": state["currentXp"],
+        "nextLevelXp": next_level_xp(state["level"]),
+        "streak": state["streak"],
+        "completed": completed_today,
+    })
+
+
 @app.route('/')
 def index():
     return send_from_directory(app.static_folder, 'index.html')
