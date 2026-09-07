@@ -615,6 +615,10 @@ createApp({
     data() {
 
         return {
+            
+            // バックエンド完成前は true
+            // バックエンド完成後は false
+            useMock: true,
 
             currentView: "home",
 
@@ -764,50 +768,80 @@ createApp({
         async loadHomeData() {
 
             this.startLoading(
-                "情報を読み込んでいます..."
+        "情報を読み込んでいます..."
+    );
+
+    try {
+
+        // =========================
+        // モックデータ
+        // =========================
+        if (this.useMock) {
+
+            // API通信っぽく見せるため少し待つ
+            await new Promise(resolve =>
+                setTimeout(resolve, 800)
             );
 
+            // 初回だけ仮のユーザー情報を設定
+            if (this.progress.level === 0) {
 
-            try {
-
-                const [
-                    progress,
-                    todayWorkout
-                ] = await Promise.all([
-
-                    this.loadProgress(),
-
-                    this.loadTodayWorkout()
-
-                ]);
-
-
-                this.progress = progress;
-
-                this.todayWorkoutExists =
-                    todayWorkout.exists;
-
-
-                if (todayWorkout.exists) {
-
-                    this.workoutPlan =
-                        todayWorkout.workoutPlan;
-
-                }
-
-            } catch (error) {
-
-                this.showError(
-                    error.message
-                );
-
-            } finally {
-
-                this.stopLoading();
+                this.progress = {
+                    level: 3,
+                    currentXp: 240,
+                    nextLevelXp: 300,
+                    streak: 5,
+                    trainedToday: false
+                };
 
             }
 
-        },
+            return;
+        }
+
+
+        // =========================
+        // 本物のバックエンドAPI
+        // =========================
+
+        const [
+            progress,
+            todayWorkout
+        ] = await Promise.all([
+
+            this.loadProgress(),
+
+            this.loadTodayWorkout()
+
+        ]);
+
+
+        this.progress = progress;
+
+        this.todayWorkoutExists =
+            todayWorkout.exists;
+
+
+        if (todayWorkout.exists) {
+
+            this.workoutPlan =
+                todayWorkout.workoutPlan;
+
+        }
+
+    } catch (error) {
+
+        this.showError(
+            error.message
+        );
+
+    } finally {
+
+        this.stopLoading();
+
+    }
+
+},
 
 
         /*
@@ -815,136 +849,314 @@ createApp({
          */
         async generateWorkout() {
 
-            if (!this.canGenerateWorkout) {
+    if (!this.canGenerateWorkout) {
 
-                this.showError(
-                    "鍛えたい部位と運動時間を選択してください。"
-                );
+        this.showError(
+            "鍛えたい部位と運動時間を選択してください。"
+        );
 
-                return;
+        return;
 
-            }
+    }
 
 
-            this.startLoading(
-                "AIが筋トレメニューを考えています..."
+    this.clearError();
+
+    this.startLoading(
+        "AIが筋トレメニューを考えています..."
+    );
+
+
+    try {
+
+        // =========================
+        // モックデータ
+        // =========================
+        if (this.useMock) {
+
+            // AIが考えているように1.5秒待つ
+            await new Promise(resolve =>
+                setTimeout(resolve, 1500)
             );
 
 
-            try {
+            this.workoutPlan = {
 
-                const workoutPlan =
-                    await this.requestApi(
+                workoutPlanId: 1,
 
-                        "/api/v1/workout-plans",
+                title:
+                    "胸20分トレーニング",
 
-                        {
-                            method: "POST",
+                targetPart:
+                    this.workoutRequest.targetPart,
 
-                            headers: {
-                                "Content-Type":
-                                    "application/json"
-                            },
+                duration:
+                    this.workoutRequest.duration,
 
-                            body: JSON.stringify(
-                                this.workoutRequest
-                            )
-                        }
+                exercises: [
 
-                    );
+                    {
+                        name: "プッシュアップ",
+                        reps: 10,
+                        seconds: null,
+                        sets: 3
+                    },
+
+                    {
+                        name: "ナロープッシュアップ",
+                        reps: 8,
+                        seconds: null,
+                        sets: 3
+                    },
+
+                    {
+                        name: "プランク",
+                        reps: null,
+                        seconds: 30,
+                        sets: 3
+                    }
+
+                ]
+
+            };
 
 
-                this.workoutPlan =
-                    workoutPlan;
+            this.todayWorkoutExists =
+                true;
 
 
-                this.currentView =
-                    "workout";
+            this.currentView =
+                "workout";
 
-            } catch (error) {
 
-                this.showError(
-                    error.message
-                );
+            return;
+        }
 
-            } finally {
 
-                this.stopLoading();
+        // =========================
+        // 本物のバックエンドAPI
+        // =========================
 
-            }
+        const workoutPlan =
+            await this.requestApi(
 
-        },
+                "/api/v1/workout-plans",
 
+                {
+                    method: "POST",
+
+                    headers: {
+                        "Content-Type":
+                            "application/json"
+                    },
+
+                    body: JSON.stringify(
+                        this.workoutRequest
+                    )
+                }
+
+            );
+
+
+        this.workoutPlan =
+            workoutPlan;
+
+
+        this.todayWorkoutExists =
+            true;
+
+
+        this.currentView =
+            "workout";
+
+    } catch (error) {
+
+        this.showError(
+            error.message
+        );
+
+    } finally {
+
+        this.stopLoading();
+
+    }
+
+},
 
         /*
          * 筋トレ完了記録を登録
          */
         async completeWorkout() {
 
-            if (!this.workoutPlan.workoutPlanId) {
+    if (!this.workoutPlan.workoutPlanId) {
 
-                this.showError(
-                    "筋トレメニューの情報がありません。"
-                );
+        this.showError(
+            "筋トレメニューの情報がありません。"
+        );
 
-                return;
+        return;
 
-            }
+    }
 
 
-            this.startLoading(
-                "筋トレ結果を記録しています..."
+    this.clearError();
+
+    this.startLoading(
+        "筋トレ結果を記録しています..."
+    );
+
+
+    try {
+
+        // =========================
+        // モックデータ
+        // =========================
+        if (this.useMock) {
+
+            await new Promise(resolve =>
+                setTimeout(resolve, 1000)
             );
 
 
-            try {
+            const xpGained = 50;
 
-                const result =
-                    await this.requestApi(
+            const previousLevel =
+                this.progress.level;
 
-                        "/api/v1/workout-records",
+            let newXp =
+                this.progress.currentXp
+                + xpGained;
 
-                        {
-                            method: "POST",
+            let newLevel =
+                this.progress.level;
 
-                            headers: {
-                                "Content-Type":
-                                    "application/json"
-                            },
-
-                            body: JSON.stringify({
-
-                                workoutPlanId:
-                                    this.workoutPlan
-                                        .workoutPlanId
-
-                            })
-
-                        }
-
-                    );
+            let levelUp =
+                false;
 
 
-                this.completionResult =
-                    result;
+            // 仮のレベルアップ判定
+            if (
+                newXp >=
+                this.progress.nextLevelXp
+            ) {
 
+                newXp =
+                    newXp -
+                    this.progress.nextLevelXp;
 
-                this.currentView =
-                    "complete";
+                newLevel =
+                    newLevel + 1;
 
-            } catch (error) {
-
-                this.showError(
-                    error.message
-                );
-
-            } finally {
-
-                this.stopLoading();
+                levelUp =
+                    true;
 
             }
 
-        },
+
+            const newStreak =
+                this.progress.streak + 1;
+
+
+            this.completionResult = {
+
+                workoutRecordId: 1,
+
+                xpGained: xpGained,
+
+                currentXp: newXp,
+
+                level: newLevel,
+
+                levelUp: levelUp,
+
+                previousLevel:
+                    previousLevel,
+
+                streak: newStreak,
+
+                message:
+                    "トレーニングお疲れさま！この調子で続けていきましょう！"
+
+            };
+
+
+            // ホーム画面にも結果を反映
+            this.progress = {
+
+                level: newLevel,
+
+                currentXp: newXp,
+
+                nextLevelXp:
+                    levelUp
+                        ? 400
+                        : this.progress.nextLevelXp,
+
+                streak: newStreak,
+
+                trainedToday: true
+
+            };
+
+
+            this.currentView =
+                "complete";
+
+
+            return;
+        }
+
+
+        // =========================
+        // 本物のバックエンドAPI
+        // =========================
+
+        const result =
+            await this.requestApi(
+
+                "/api/v1/workout-records",
+
+                {
+                    method: "POST",
+
+                    headers: {
+                        "Content-Type":
+                            "application/json"
+                    },
+
+                    body: JSON.stringify({
+
+                        workoutPlanId:
+                            this.workoutPlan
+                                .workoutPlanId
+
+                    })
+
+                }
+
+            );
+
+
+        this.completionResult =
+            result;
+
+
+        this.currentView =
+            "complete";
+
+    } catch (error) {
+
+        this.showError(
+            error.message
+        );
+
+    } finally {
+
+        this.stopLoading();
+
+    }
+
+},
 
 
         /*
