@@ -112,6 +112,91 @@ def get_today_workout():
     })
 
 
+def _validate_workout_request(data: dict) -> list:
+    invalid_params = []
+    if data.get("targetPart") not in TARGET_PARTS:
+        invalid_params.append({"name": "targetPart", "reason": "鍛えたい部位を選択してください。"})
+    if data.get("duration") not in DURATIONS:
+        invalid_params.append({"name": "duration", "reason": "運動時間を選択してください。"})
+    return invalid_params
+
+
+def _build_menu_prompt(target_part: str, duration: int) -> str:
+    # 小型モデルは説明文を混ぜて出力しやすいため、形式を厳密に指定
+    return (
+        f"{target_part}を{duration}分間鍛える筋トレメニューを、"
+        "JSON配列のみで出力してください。"
+        '各要素は {"name": 種目名, "reps": 回数またはnull, '
+        '"seconds": 秒数またはnull, "sets": セット数} の形式にしてください。'
+        "説明文やコードブロック記号は一切含めないでください。"
+    )
+
+
+def _generate_exercises(prompt: str) -> list:
+    chat_completion = client.chat.completions.create(
+        messages=[{"role": "user", "content": prompt}],
+        model=OLLAMA_MODEL,
+    )
+    raw_text = chat_completion.choices[0].message.content
+    return json.loads(raw_text)
+
+
+def _build_new_plan(state: dict, target_part: str, duration: int, exercises: list) -> dict:
+    plan_id = state["nextWorkoutPlanId"]
+    return {
+        "workoutPlanId": plan_id,
+        "title": f"{target_part}{duration}分トレーニング",
+        "targetPart": target_part,
+        "duration": duration,
+        "exercises": exercises,
+        "completed": False,
+        "createdDate": get_today().isoformat(),
+    }
+
+
+def _to_public_plan(plan: dict) -> dict:
+    # completed/createdDateはサーバー内部専用のフィールドなのでレスポンスから除外
+    return {k: v for k, v in plan.items() if k not in ("completed", "createdDate")}
+
+
+def _generate_plan_exercises(target_part: str, duration: int) -> list:
+    prompt = _build_menu_prompt(target_part, duration)
+    return _generate_exercises(prompt)
+
+
+def _create_and_save_plan(target_part: str, duration: int, exercises: list) -> dict:
+    state = load_state()
+    plan = _build_new_plan(state, target_part, duration, exercises)
+    state["todayWorkoutPlan"] = plan
+    state["nextWorkoutPlanId"] = plan["workoutPlanId"] + 1
+    save_state(state)
+    return plan
+
+
+@app.route('/api/v1/workout-plans', methods=['POST'])
+def create_workout_plan():
+    data = request.get_json(silent=True) or {}
+
+    invalid_params = _validate_workout_request(data)
+    if invalid_params:
+        return _error_response(400, "Invalid Parameter", "入力内容に誤りがあります。", invalid_params)
+
+    target_part = data["targetPart"]
+    duration = data["duration"]
+
+    try:
+        exercises = _generate_plan_exercises(target_part, duration)
+    except Exception as e:
+        app.logger.error(f"Workout plan generation failed: {e}")
+        return _error_response(
+            503, "AI Service Unavailable",
+            "AIとの通信に失敗しました。時間をおいて再度お試しください。"
+        )
+
+    plan = _create_and_save_plan(target_part, duration, exercises)
+    return jsonify(_to_public_plan(plan)), 201
+
+
 @app.route('/')
 def index():
     return send_from_directory(app.static_folder, 'index.html')
