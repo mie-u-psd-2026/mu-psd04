@@ -95,6 +95,23 @@ def get_progress():
     })
 
 
+@app.route('/api/v1/workout-plans/today', methods=['GET'])
+def get_today_workout():
+    state = load_state()
+    plan = state["todayWorkoutPlan"]
+    today = get_today().isoformat()
+
+    if plan is None or plan["createdDate"] != today:
+        return jsonify({"exists": False, "completed": False, "workoutPlan": None})
+
+    workout_plan = {k: v for k, v in plan.items() if k not in ("completed", "createdDate")}
+    return jsonify({
+        "exists": True,
+        "completed": plan["completed"],
+        "workoutPlan": workout_plan,
+    })
+
+
 @app.route('/')
 def index():
     return send_from_directory(app.static_folder, 'index.html')
