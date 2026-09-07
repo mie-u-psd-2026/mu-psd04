@@ -197,6 +197,120 @@ def create_workout_plan():
     return jsonify(_to_public_plan(plan)), 201
 
 
+def _find_matching_plan(state: dict, workout_plan_id):
+    plan = state["todayWorkoutPlan"]
+    if plan is None or plan["workoutPlanId"] != workout_plan_id:
+        return None
+    return plan
+
+
+def _calculate_streak(state: dict, today) -> int:
+    last_date_str = state["lastWorkoutDate"]
+    if last_date_str is None:
+        return 1
+
+    last_date = datetime.fromisoformat(last_date_str).date()
+    if last_date == today:
+        return state["streak"]
+    if last_date == today - timedelta(days=1):
+        return state["streak"] + 1
+    return 1
+
+
+def _apply_xp(state: dict, xp_gained: int) -> tuple:
+    current_xp = state["currentXp"] + xp_gained
+    level = state["level"]
+    level_up = False
+
+    # 1回のトレーニングで複数レベル上がる可能性を考慮しwhileで判定
+    while current_xp >= next_level_xp(level):
+        current_xp -= next_level_xp(level)
+        level += 1
+        level_up = True
+
+    return current_xp, level, level_up
+
+
+def _build_record(state: dict, plan: dict, today_str: str) -> dict:
+    return {
+        "workoutRecordId": state["nextWorkoutRecordId"],
+        "date": today_str,
+        "targetPart": plan["targetPart"],
+        "duration": plan["duration"],
+        "exercises": plan["exercises"],
+        "xpGained": XP_PER_WORKOUT,
+    }
+
+
+def _persist_completion(state, plan, current_xp, level, new_streak, today_str, record):
+    plan["completed"] = True
+    state["todayWorkoutPlan"] = plan
+    state["currentXp"] = current_xp
+    state["level"] = level
+    state["streak"] = new_streak
+    state["lastWorkoutDate"] = today_str
+    state["workoutHistory"].insert(0, record)
+    state["workoutHistory"] = state["workoutHistory"][:30]
+    state["nextWorkoutRecordId"] = record["workoutRecordId"] + 1
+    save_state(state)
+
+
+def _complete_workout(state: dict, plan: dict) -> dict:
+    today = get_today()
+    today_str = today.isoformat()
+    new_streak = _calculate_streak(state, today)
+    current_xp, level, level_up = _apply_xp(state, XP_PER_WORKOUT)
+    previous_level = state["level"]
+    record = _build_record(state, plan, today_str)
+
+    _persist_completion(state, plan, current_xp, level, new_streak, today_str, record)
+
+    return {
+        "record": record,
+        "currentXp": current_xp,
+        "level": level,
+        "levelUp": level_up,
+        "previousLevel": previous_level,
+        "streak": new_streak,
+    }
+
+
+def _build_completion_message(level_up: bool) -> str:
+    return (
+        "レベルアップおめでとう！この調子で続けていきましょう！" if level_up
+        else "トレーニングお疲れさま！この調子で続けていきましょう！"
+    )
+
+
+def _build_completion_response(result: dict) -> dict:
+    record = result["record"]
+    return {
+        "workoutRecordId": record["workoutRecordId"],
+        "xpGained": record["xpGained"],
+        "currentXp": result["currentXp"],
+        "level": result["level"],
+        "levelUp": result["levelUp"],
+        "previousLevel": result["previousLevel"],
+        "streak": result["streak"],
+        "message": _build_completion_message(result["levelUp"]),
+    }
+
+
+@app.route('/api/v1/workout-records', methods=['POST'])
+def create_workout_record():
+    data = request.get_json(silent=True) or {}
+    state = load_state()
+
+    plan = _find_matching_plan(state, data.get("workoutPlanId"))
+    if plan is None:
+        return _error_response(404, "Resource Not Found", "指定された筋トレメニューが見つかりませんでした。")
+    if plan["completed"]:
+        return _error_response(409, "Workout Already Completed", "この筋トレはすでに完了しています。")
+
+    result = _complete_workout(state, plan)
+    return jsonify(_build_completion_response(result)), 201
+
+
 @app.route('/')
 def index():
     return send_from_directory(app.static_folder, 'index.html')
