@@ -63,7 +63,7 @@ def load_state() -> dict:
 
 
 def save_state(state: dict) -> None:
-    # dataディレクトリが未作成の環境でも動作するようにしている
+    # data ディレクトリが未作成の環境でも動作するようにしている
     os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(state, f, ensure_ascii=False, indent=2)
@@ -144,12 +144,39 @@ def _build_menu_prompt(target_part: str, duration: int) -> str:
 
 
 def _extract_json_array(text: str) -> str:
-    # 小型モデルは/no_think指示があっても前置き文を付けることがあるため、
-    # 応答文字列から最初の[〜最後の]までを抽出
+    # 小型モデルは /no_think 指示があっても前置き文を付けることがあるため、
+    # 応答文字列から最初の [ 〜最後の ] までを抽出
     match = re.search(r"\[.*\]", text, re.DOTALL)
     if match is None:
         raise ValueError("応答にJSON配列が含まれていません")
     return match.group(0)
+
+
+def _normalize_exercise(exercise: dict) -> dict | None:
+    # AIの出力が仕様書11章2節の「レスポンス項目」に違反することがあるため、
+    # reps/seconds の排他性と必須項目の欠落を補正
+    name = exercise.get("name")
+    reps = exercise.get("reps")
+    seconds = exercise.get("seconds")
+    sets = exercise.get("sets")
+
+    if not name or (reps is None and seconds is None):
+        return None
+
+    if reps is not None and seconds is not None:
+        seconds = None  # 多く使われている reps 優先
+
+    return {
+        "name": name,
+        "reps": reps,
+        "seconds": seconds,
+        "sets": sets if sets is not None else 3,  # 筋トレ初心者向けに規定値3セット
+    }
+
+
+def _normalize_exercises(exercises: list) -> list:
+    normalized = [_normalize_exercise(e) for e in exercises]
+    return [e for e in normalized if e is not None]
 
 
 def _generate_exercises(prompt: str) -> list:
@@ -158,7 +185,11 @@ def _generate_exercises(prompt: str) -> list:
         model=OLLAMA_MODEL,
     )
     raw_text = chat_completion.choices[0].message.content
-    return json.loads(_extract_json_array(raw_text))
+    exercises = json.loads(_extract_json_array(raw_text))
+    normalized = _normalize_exercises(exercises)
+    if not normalized:
+        raise ValueError("有効な種目が1件も生成されませんでした")
+    return normalized
 
 
 def _build_new_plan(state: dict, target_part: str, duration: int, exercises: list) -> dict:
