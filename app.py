@@ -37,9 +37,9 @@ client = OpenAI(
     base_url="http://localhost:11434/v1",
     api_key="ollama",
 )
-# OLLAMA_MODEL = "qwen3.5:0.8b"
-# OLLAMA_MODEL = "qwen2.5:1.5b"
-OLLAMA_MODEL = "llama3.2:1b"
+# OLLAMA_MODEL = "qwen3.5:0.8b"     # 回答不能
+# OLLAMA_MODEL = "qwen2.5:1.5b"     # 応答時間許容範囲内、日本語出力不安定
+OLLAMA_MODEL = "llama3.2:1b"        # 応答時間 qwen2.5:1.5b と同等、日本語出力安定
 
 def _initial_state() -> dict:
     # 初期状態定義
