@@ -4,6 +4,7 @@ import json
 import os
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
+import re
 
 DATA_FILE = "data/user_state.json"
 TIMEZONE = ZoneInfo("Asia/Tokyo")
@@ -27,7 +28,7 @@ client = OpenAI(
     base_url="http://localhost:11434/v1",
     api_key="ollama",
 )
-OLLAMA_MODEL = "qwen3.5:0.8b"
+OLLAMA_MODEL = "qwen2.5:1.5b"
 
 
 def _initial_state() -> dict:
@@ -129,7 +130,17 @@ def _build_menu_prompt(target_part: str, duration: int) -> str:
         '各要素は {"name": 種目名, "reps": 回数またはnull, '
         '"seconds": 秒数またはnull, "sets": セット数} の形式にしてください。'
         "説明文やコードブロック記号は一切含めないでください。"
+        "/no_think"     # 思考プロセスの出力を抑制する
     )
+
+
+def _extract_json_array(text: str) -> str:
+    # 小型モデルは/no_think指示があっても前置き文を付けることがあるため、
+    # 応答文字列から最初の[〜最後の]までを抽出
+    match = re.search(r"\[.*\]", text, re.DOTALL)
+    if match is None:
+        raise ValueError("応答にJSON配列が含まれていません")
+    return match.group(0)
 
 
 def _generate_exercises(prompt: str) -> list:
@@ -138,7 +149,7 @@ def _generate_exercises(prompt: str) -> list:
         model=OLLAMA_MODEL,
     )
     raw_text = chat_completion.choices[0].message.content
-    return json.loads(raw_text)
+    return json.loads(_extract_json_array(raw_text))
 
 
 def _build_new_plan(state: dict, target_part: str, duration: int, exercises: list) -> dict:
