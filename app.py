@@ -37,8 +37,9 @@ client = OpenAI(
     base_url="http://localhost:11434/v1",
     api_key="ollama",
 )
-OLLAMA_MODEL = "qwen2.5:1.5b"
-# OLLAMA_MODEL = "llama3.2:1b"
+# OLLAMA_MODEL = "qwen3.5:0.8b"
+# OLLAMA_MODEL = "qwen2.5:1.5b"
+OLLAMA_MODEL = "llama3.2:1b"
 
 def _initial_state() -> dict:
     # 初期状態定義
@@ -135,11 +136,13 @@ def _build_menu_prompt(target_part: str, duration: int) -> str:
     # 小型モデルは説明文を混ぜて出力しやすいため、形式を厳密に指定
     return (
         f"{target_part}を{duration}分間鍛える筋トレメニューを、"
-        "JSON配列のみで出力してください。"
+        "JSON配列のみで出力してください。実在する一般的な筋トレ種目のみ使用すること。"
+        "種目名（nameフィールド）は必ず日本語で出力し、英語表記は使用しないこと。"
+        "例：[{\"name\": \"腕立て伏せ\", \"reps\": 15, \"seconds\": null, \"sets\": 3}]"
         '各要素は {"name": 種目名, "reps": 回数またはnull, '
         '"seconds": 秒数またはnull, "sets": セット数} の形式にしてください。'
         "説明文やコードブロック記号は一切含めないでください。"
-        "/no_think"     # 思考プロセスの出力を抑制する
+        "/no_think"     # 思考プロセスの出力を抑制
     )
 
 
