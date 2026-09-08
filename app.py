@@ -9,6 +9,15 @@ import re
 DATA_FILE = "data/user_state.json"
 TIMEZONE = ZoneInfo("Asia/Tokyo")
 TARGET_PARTS = {"chest", "arms", "back", "shoulders", "abs", "legs", "fullBody"}
+TARGET_PART_LABELS = {
+    "chest": "胸",
+    "arms": "腕",
+    "back": "背中",
+    "shoulders": "肩",
+    "abs": "腹筋",
+    "legs": "脚",
+    "fullBody": "全身",
+}
 DURATIONS = {10, 20, 30, 45, 60}
 XP_PER_WORKOUT = 50
 
@@ -29,7 +38,7 @@ client = OpenAI(
     api_key="ollama",
 )
 OLLAMA_MODEL = "qwen2.5:1.5b"
-
+# OLLAMA_MODEL = "llama3.2:1b"
 
 def _initial_state() -> dict:
     # 初期状態定義
@@ -154,9 +163,10 @@ def _generate_exercises(prompt: str) -> list:
 
 def _build_new_plan(state: dict, target_part: str, duration: int, exercises: list) -> dict:
     plan_id = state["nextWorkoutPlanId"]
+    label = TARGET_PART_LABELS[target_part]
     return {
         "workoutPlanId": plan_id,
-        "title": f"{target_part}{duration}分トレーニング",
+        "title": f"{label}{duration}分トレーニング",
         "targetPart": target_part,
         "duration": duration,
         "exercises": exercises,
