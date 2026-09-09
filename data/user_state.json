@@ -1,0 +1,65 @@
+{
+  "level": 1,
+  "currentXp": 50,
+  "streak": 1,
+  "lastWorkoutDate": "2026-09-09",
+  "nextWorkoutPlanId": 2,
+  "nextWorkoutRecordId": 2,
+  "todayWorkoutPlan": {
+    "workoutPlanId": 1,
+    "title": "legs30分トレーニング",
+    "targetPart": "legs",
+    "duration": 30,
+    "exercises": [
+      {
+        "name": "脚の前方拘束",
+        "reps": 10,
+        "seconds": null,
+        "sets": 3
+      },
+      {
+        "name": "脚の後方拘束",
+        "reps": 12,
+        "seconds": null,
+        "sets": 3
+      },
+      {
+        "name": "脚の内側拘束",
+        "reps": 15,
+        "seconds": null,
+        "sets": 3
+      }
+    ],
+    "completed": true,
+    "createdDate": "2026-09-09"
+  },
+  "workoutHistory": [
+    {
+      "workoutRecordId": 1,
+      "date": "2026-09-09",
+      "targetPart": "legs",
+      "duration": 30,
+      "exercises": [
+        {
+          "name": "脚の前方拘束",
+          "reps": 10,
+          "seconds": null,
+          "sets": 3
+        },
+        {
+          "name": "脚の後方拘束",
+          "reps": 12,
+          "seconds": null,
+          "sets": 3
+        },
+        {
+          "name": "脚の内側拘束",
+          "reps": 15,
+          "seconds": null,
+          "sets": 3
+        }
+      ],
+      "xpGained": 50
+    }
+  ]
+}

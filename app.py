@@ -27,7 +27,7 @@ client = OpenAI(
     base_url="http://localhost:11434/v1",
     api_key="ollama",
 )
-OLLAMA_MODEL = "qwen2.5-coder:0.5b"
+OLLAMA_MODEL = "llama3.2:1b"
 
 
 def _initial_state() -> dict:
@@ -91,7 +91,7 @@ def get_progress():
         "currentXp": state["currentXp"],
         "nextLevelXp": next_level_xp(state["level"]),
         "streak": state["streak"],
-        "completed": completed_today,
+        "trainedToday": completed_today,
     })
 
 
@@ -122,23 +122,101 @@ def _validate_workout_request(data: dict) -> list:
 
 
 def _build_menu_prompt(target_part: str, duration: int) -> str:
-    # 小型モデルは説明文を混ぜて出力しやすいため、形式を厳密に指定
-    return (
-        f"{target_part}を{duration}分間鍛える筋トレメニューを、"
-        "JSON配列のみで出力してください。"
-        '各要素は {"name": 種目名, "reps": 回数またはnull, '
-        '"seconds": 秒数またはnull, "sets": セット数} の形式にしてください。'
-        "説明文やコードブロック記号は一切含めないでください。"
-    )
+    part_names = {
+        "chest": "胸",
+        "arms": "腕",
+        "back": "背中",
+        "shoulders": "肩",
+        "abs": "腹筋",
+        "legs": "脚",
+        "fullBody": "全身",
+    }
 
+    target_name = part_names.get(target_part, target_part)
+
+    return (
+        f"鍛えたい部位は「{target_name}」です。"
+        f"運動時間は{duration}分です。"
+        "初心者向けの自重筋トレを3種目作成してください。"
+    )
 
 def _generate_exercises(prompt: str) -> list:
-    chat_completion = client.chat.completions.create(
-        messages=[{"role": "user", "content": prompt}],
-        model=OLLAMA_MODEL,
+    system_prompt = (
+        "あなたは筋トレメニュー生成APIです。"
+        "必ずJSONオブジェクトだけを返してください。"
+        "必ず exercises という配列を含めてください。"
+        "exercisesには必ず3種目入れてください。"
+        "各種目は name, reps, seconds, sets を持ちます。"
+        "nameには『プッシュアップ』『スクワット』など具体的な種目名を入れてください。"
+        "部位名だけをnameに入れてはいけません。"
+        "回数で行う種目はrepsを整数、secondsをnullにしてください。"
+        "時間で行う種目はrepsをnull、secondsを整数にしてください。"
+        "説明文、Markdown、コードブロックは禁止です。"
+        '出力例: {"exercises": ['
+        '{"name":"プッシュアップ","reps":10,"seconds":null,"sets":3},'
+        '{"name":"膝つきプッシュアップ","reps":12,"seconds":null,"sets":3},'
+        '{"name":"プランク","reps":null,"seconds":30,"sets":3}'
+        ']}'
     )
-    raw_text = chat_completion.choices[0].message.content
-    return json.loads(raw_text)
+
+    for attempt in range(2):
+
+        messages = [
+            {
+                "role": "system",
+                "content": system_prompt,
+            },
+            {
+                "role": "user",
+                "content": prompt,
+            },
+        ]
+
+        if attempt == 1:
+            messages.append({
+                "role": "user",
+                "content": (
+                    "前の回答は形式が違いました。"
+                    "必ず exercises 配列に3種目を入れたJSONだけを返してください。"
+                ),
+            })
+
+        chat_completion = client.chat.completions.create(
+            messages=messages,
+            model=OLLAMA_MODEL,
+            temperature=0,
+            response_format={"type": "json_object"},
+        )
+
+        raw_text = chat_completion.choices[0].message.content
+
+        app.logger.info(
+            f"Ollama raw response (attempt {attempt + 1}): {raw_text}"
+        )
+
+        if not raw_text:
+            continue
+
+        try:
+            data = json.loads(raw_text)
+        except json.JSONDecodeError:
+            continue
+
+        exercises = data.get("exercises")
+
+        if isinstance(exercises, list) and len(exercises) > 0:
+            return exercises
+
+        # 1種目だけ直接返された場合も最低限受け付ける
+        if (
+            isinstance(data, dict)
+            and "name" in data
+            and "sets" in data
+        ):
+            if attempt == 1:
+                return [data]
+
+    raise ValueError("AIから有効な筋トレメニューを取得できませんでした。")
 
 
 def _build_new_plan(state: dict, target_part: str, duration: int, exercises: list) -> dict:
