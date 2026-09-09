@@ -102,7 +102,7 @@ def get_progress():
         "currentXp": state["currentXp"],
         "nextLevelXp": next_level_xp(state["level"]),
         "streak": state["streak"],
-        "trainedToday": completed_today,
+        "completed": completed_today,
     })
 
 
@@ -133,20 +133,9 @@ def _validate_workout_request(data: dict) -> list:
 
 
 def _build_menu_prompt(target_part: str, duration: int) -> str:
-    part_names = {
-        "chest": "胸",
-        "arms": "腕",
-        "back": "背中",
-        "shoulders": "肩",
-        "abs": "腹筋",
-        "legs": "脚",
-        "fullBody": "全身",
-    }
-
-    target_name = part_names.get(target_part, target_part)
-
+    # 小型モデルは説明文を混ぜて出力しやすいため、形式を厳密に指定
     return (
-        f"{target_part}を{duration}分間鍛える筋トレメニューを、"
+        f"{TARGET_PART_LABELS[target_part]}を{duration}分間鍛える筋トレメニューを、"
         "JSON配列のみで出力してください。実在する一般的な筋トレ種目のみ使用すること。"
         "種目名（nameフィールド）は必ず日本語で出力し、英語表記は使用しないこと。"
         "例：[{\"name\": \"腕立て伏せ\", \"reps\": 15, \"seconds\": null, \"sets\": 3}]"
