@@ -4,10 +4,20 @@ import json
 import os
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
+import re
 
 DATA_FILE = "data/user_state.json"
 TIMEZONE = ZoneInfo("Asia/Tokyo")
 TARGET_PARTS = {"chest", "arms", "back", "shoulders", "abs", "legs", "fullBody"}
+TARGET_PART_LABELS = {
+    "chest": "胸",
+    "arms": "腕",
+    "back": "背中",
+    "shoulders": "肩",
+    "abs": "腹筋",
+    "legs": "脚",
+    "fullBody": "全身",
+}
 DURATIONS = {10, 20, 30, 45, 60}
 XP_PER_WORKOUT = 50
 
@@ -27,8 +37,9 @@ client = OpenAI(
     base_url="http://localhost:11434/v1",
     api_key="ollama",
 )
-OLLAMA_MODEL = "llama3.2:1b"
-
+# OLLAMA_MODEL = "qwen3.5:0.8b"     # 回答不能
+# OLLAMA_MODEL = "qwen2.5:1.5b"     # 応答時間許容範囲内、日本語出力不安定
+OLLAMA_MODEL = "llama3.2:1b"        # 応答時間 qwen2.5:1.5b と同等、日本語出力安定
 
 def _initial_state() -> dict:
     # 初期状態定義
@@ -53,7 +64,7 @@ def load_state() -> dict:
 
 
 def save_state(state: dict) -> None:
-    # dataディレクトリが未作成の環境でも動作するようにしている
+    # data ディレクトリが未作成の環境でも動作するようにしている
     os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(state, f, ensure_ascii=False, indent=2)
@@ -135,95 +146,72 @@ def _build_menu_prompt(target_part: str, duration: int) -> str:
     target_name = part_names.get(target_part, target_part)
 
     return (
-        f"鍛えたい部位は「{target_name}」です。"
-        f"運動時間は{duration}分です。"
-        "初心者向けの自重筋トレを3種目作成してください。"
+        f"{target_part}を{duration}分間鍛える筋トレメニューを、"
+        "JSON配列のみで出力してください。実在する一般的な筋トレ種目のみ使用すること。"
+        "種目名（nameフィールド）は必ず日本語で出力し、英語表記は使用しないこと。"
+        "例：[{\"name\": \"腕立て伏せ\", \"reps\": 15, \"seconds\": null, \"sets\": 3}]"
+        '各要素は {"name": 種目名, "reps": 回数またはnull, '
+        '"seconds": 秒数またはnull, "sets": セット数} の形式にしてください。'
+        "説明文やコードブロック記号は一切含めないでください。"
+        "/no_think"     # 思考プロセスの出力を抑制
     )
+
+
+def _extract_json_array(text: str) -> str:
+    # 小型モデルは /no_think 指示があっても前置き文を付けることがあるため、
+    # 応答文字列から最初の [ 〜最後の ] までを抽出
+    match = re.search(r"\[.*\]", text, re.DOTALL)
+    if match is None:
+        raise ValueError("応答にJSON配列が含まれていません")
+    return match.group(0)
+
+
+def _normalize_exercise(exercise: dict) -> dict | None:
+    # AIの出力が仕様書11章2節の「レスポンス項目」に違反することがあるため、
+    # reps/seconds の排他性と必須項目の欠落を補正
+    name = exercise.get("name")
+    reps = exercise.get("reps")
+    seconds = exercise.get("seconds")
+    sets = exercise.get("sets")
+
+    if not name or (reps is None and seconds is None):
+        return None
+
+    if reps is not None and seconds is not None:
+        seconds = None  # 多く使われている reps 優先
+
+    return {
+        "name": name,
+        "reps": reps,
+        "seconds": seconds,
+        "sets": sets if sets is not None else 3,  # 筋トレ初心者向けに規定値3セット
+    }
+
+
+def _normalize_exercises(exercises: list) -> list:
+    normalized = [_normalize_exercise(e) for e in exercises]
+    return [e for e in normalized if e is not None]
+
 
 def _generate_exercises(prompt: str) -> list:
-    system_prompt = (
-        "あなたは筋トレメニュー生成APIです。"
-        "必ずJSONオブジェクトだけを返してください。"
-        "必ず exercises という配列を含めてください。"
-        "exercisesには必ず3種目入れてください。"
-        "各種目は name, reps, seconds, sets を持ちます。"
-        "nameには『プッシュアップ』『スクワット』など具体的な種目名を入れてください。"
-        "部位名だけをnameに入れてはいけません。"
-        "回数で行う種目はrepsを整数、secondsをnullにしてください。"
-        "時間で行う種目はrepsをnull、secondsを整数にしてください。"
-        "説明文、Markdown、コードブロックは禁止です。"
-        '出力例: {"exercises": ['
-        '{"name":"プッシュアップ","reps":10,"seconds":null,"sets":3},'
-        '{"name":"膝つきプッシュアップ","reps":12,"seconds":null,"sets":3},'
-        '{"name":"プランク","reps":null,"seconds":30,"sets":3}'
-        ']}'
+    chat_completion = client.chat.completions.create(
+        messages=[{"role": "user", "content": prompt}],
+        model=OLLAMA_MODEL,
     )
-
-    for attempt in range(2):
-
-        messages = [
-            {
-                "role": "system",
-                "content": system_prompt,
-            },
-            {
-                "role": "user",
-                "content": prompt,
-            },
-        ]
-
-        if attempt == 1:
-            messages.append({
-                "role": "user",
-                "content": (
-                    "前の回答は形式が違いました。"
-                    "必ず exercises 配列に3種目を入れたJSONだけを返してください。"
-                ),
-            })
-
-        chat_completion = client.chat.completions.create(
-            messages=messages,
-            model=OLLAMA_MODEL,
-            temperature=0,
-            response_format={"type": "json_object"},
-        )
-
-        raw_text = chat_completion.choices[0].message.content
-
-        app.logger.info(
-            f"Ollama raw response (attempt {attempt + 1}): {raw_text}"
-        )
-
-        if not raw_text:
-            continue
-
-        try:
-            data = json.loads(raw_text)
-        except json.JSONDecodeError:
-            continue
-
-        exercises = data.get("exercises")
-
-        if isinstance(exercises, list) and len(exercises) > 0:
-            return exercises
-
-        # 1種目だけ直接返された場合も最低限受け付ける
-        if (
-            isinstance(data, dict)
-            and "name" in data
-            and "sets" in data
-        ):
-            if attempt == 1:
-                return [data]
-
-    raise ValueError("AIから有効な筋トレメニューを取得できませんでした。")
+    raw_text = chat_completion.choices[0].message.content
+    exercises = json.loads(_extract_json_array(raw_text))
+    normalized = _normalize_exercises(exercises)
+    if not normalized:
+        raise ValueError("有効な種目が1件も生成されませんでした")
+    return normalized
 
 
 def _build_new_plan(state: dict, target_part: str, duration: int, exercises: list) -> dict:
     plan_id = state["nextWorkoutPlanId"]
+    label = TARGET_PART_LABELS[target_part]
     return {
         "workoutPlanId": plan_id,
-        "title": f"{target_part}{duration}分トレーニング",
+        "title": f"{label}{duration}分トレーニング",
         "targetPart": target_part,
         "duration": duration,
         "exercises": exercises,
