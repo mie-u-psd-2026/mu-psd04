@@ -7,8 +7,8 @@
 
 
 ## 2. テスト環境
-- Windows 10/11
-- Python 3.13
+- Windows 11
+- Python 3.13.15
 - Flask, openai, tzdata
 - Ollama起動済み（`llama3.2:1b`）
 - テスト前に `data/user_state.json` を削除し、初期状態から開始する
