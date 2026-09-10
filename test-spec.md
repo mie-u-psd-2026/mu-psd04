@@ -102,3 +102,41 @@
 
 - AIが生成する種目名の**意味的な正しさ**（実在する筋トレ種目か、日本語表記か）は、自動テストの対象外とする。1B級モデルの限界であり、プロンプト改善で緩和は試みているが完全な保証はできない
 - レスポンス速度（非機能要件：AI応答10秒以内）は、ローカルCPU実行環境に強く依存するため、環境ごとに別途計測が必要
+
+
+## 6. テスト実施結果
+ 
+| No | 実施方法 | 結果 |
+|----|---|---|
+| 1  | pytest（test_app.py） | ✅ PASS |
+| 2  | pytest（test_app.py） | ✅ PASS |
+| 3  | pytest（test_app.py） | ✅ PASS |
+| 4  | 手動（curl） | ✅ PASS |
+| 5  | 手動（curl、状態ファイル手動編集） | ✅ PASS |
+| 6  | 手動（curl、状態ファイル手動編集） | ✅ PASS |
+| 7  | 手動（curl） | ✅ PASS |
+| 8  | 手動（curl） | ✅ PASS |
+| 9  | 手動（curl、状態ファイル手動編集） | ✅ PASS |
+| 10 | 手動（curl） | ✅ PASS |
+| 11 | 手動（curl） | ✅ PASS |
+| 12 | 手動（curl） | ✅ PASS |
+| 13 | 手動（curl） | ✅ PASS |
+| 14 | 手動（curl） | ✅ PASS |
+| 15 | 手動（curl） | ✅ PASS |
+| 16 | pytest（test_app.py、モック） | ✅ PASS |
+| 17 | pytest（test_app.py、モック） | ✅ PASS |
+| 18 | pytest（test_app.py、モック） | ✅ PASS |
+| 19 | pytest（test_app.py、モック） | ✅ PASS |
+| 20 | 手動（curl） | ✅ PASS |
+| 21 | 手動（curl） | ✅ PASS |
+| 22 | 手動（curl） | ✅ PASS |
+| 23 | 手動（curl） | ✅ PASS |
+| 24 | 手動（curl、状態ファイル手動編集） | ✅ PASS |
+| 25 | 手動（curl、状態ファイル手動編集） | ✅ PASS |
+| 26 | 手動（curl、状態ファイル手動編集） | ✅ PASS |
+| 27 | 手動（curl、状態ファイル手動編集） | ✅ PASS |
+| 28 | 手動（curl、状態ファイル手動編集） | ✅ PASS |
+| 29 | 手動（curl、状態ファイル手動編集） | ✅ PASS |
+| 30 | 手動（curl、状態ファイル手動編集） | ✅ PASS |
+
+**全30件、実施完了・全件PASS。**
